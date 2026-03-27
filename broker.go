@@ -54,8 +54,10 @@ func writeToStream(stream_rw *bufio.ReadWriter, data string) error {
 type Broker struct {
 }
 
+// bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 func (b *Broker) startBrokerServer() error {
 	ln, _ := net.Listen("tcp", fmt.Sprintf(":%d", BROKER_PORT))
+	fmt.Println("Server started...")
 	for {
 		conn, _ := ln.Accept() // Block until can
 		stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
