@@ -28,7 +28,7 @@ func readFromStream(stream_rw *bufio.ReadWriter) ([]byte, error) {
 		return nil, err
 	}
 
-	data, err := stream_rw.Peek(int(header)) // Block
+	data, err := stream_rw.Peek(int(header)) // Block. Data is a slice of bytes in buffer which can be modified.
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (b *Broker) startBrokerServer() error {
 	for {
 		// One connection = one client, ALWAYS. But HTTP/2 helps one client send multiple requests.
 		// Here we are not using HTTP/2, but TCP.
-		conn, _ := ln.Accept() // Block until can
+		conn, _ := ln.Accept() // Block
 		stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 		data, err := readFromStream(stream_rw)
