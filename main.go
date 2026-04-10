@@ -6,48 +6,31 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
 func main() {
-	// fmt.Println(os.Args)
-	// if os.Args[1] == "server" {
-	// 	// startServer()
-	// 	spawnServer()
-	// } else {
-	// 	clientConnect(os.Args[2])
-	// }
-
 	fmt.Println("Args: ", os.Args)
-	if os.Args[1] == "server" {
+	if os.Args[1] == "broker" {
 		broker := Broker{}
 		err := broker.startBrokerServer()
 		if err != nil {
 			fmt.Println("Error starting broker server:", err)
 		}
+	} else if os.Args[1] == "producer" {
+		producer := Producer{}
+		port, err := strconv.Atoi(os.Args[2])
+		if err != nil {
+			panic(err)
+		}
+		err = producer.startProducerServer(int16(port))
+		if err != nil {
+			panic(err)
+		}
 	} else {
 		clientConnectTCPAndEcho(10000)
 	}
-}
-
-func writeEchoToStream(stream_rw *bufio.ReadWriter, data string) error {
-	var err error
-	err = stream_rw.WriteByte(byte(len(data) + 1)) // Write length first, +1 for message type
-	if err != nil {
-		return err
-	}
-
-	err = stream_rw.WriteByte(byte(ECHO)) // Write message type
-	if err != nil {
-		return err
-	}
-
-	_, err = stream_rw.WriteString(data) // Write actual data
-	if err != nil {
-		return err
-	}
-	stream_rw.Flush()
-	return nil
 }
 
 func clientConnectTCPAndEcho(port int) {
@@ -57,25 +40,27 @@ func clientConnectTCPAndEcho(port int) {
 	line, err := rd.ReadString('\n')
 	if err != nil {
 		if err == io.EOF {
-			fmt.Println("End of input")
+			return
 		} else {
 			// panic(err)
 		}
 	}
 
 	fmt.Println("Connected to server, sending: ", line)
-	err = writeEchoToStream(stream_rw, strings.Trim(line, "\n"))
+
+	// Write to stream
+	message := strings.Trim(line, "\n")
+	fmt.Printf("Sending message: %s", message)
+	err = writeMessageToStream(stream_rw, &Message{ECHO: &message})
 	if err != nil {
-		fmt.Println("Error writing to stream:", err)
+		panic(err)
 	}
 
-	fmt.Println("Read back from broker...")
-	header, err := stream_rw.ReadByte()
-	if header == 0 || err != nil {
-		return
+	// Read from stream
+	resp_message, err := readMessageFromStream(stream_rw)
+	if err != nil {
+		panic(err)
 	}
-	data, _ := stream_rw.Peek(int(header))
-	fmt.Printf("Data from server: %s\n", data)
-	stream_rw.Discard(int(header))
+	fmt.Printf("Received message from server: %s", *resp_message.R_ECHO)
 	conn.Close()
 }

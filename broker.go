@@ -4,52 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"strconv"
 )
 
 const BROKER_PORT = 10000
-
-const (
-	ECHO = 1
-	// Other message types
-)
-
-type Message struct {
-	ECHO *string
-	// Other type here... there is no union in Go
-	A *uint8
-	B *string
-}
-
-func readFromStream(stream_rw *bufio.ReadWriter) ([]byte, error) {
-	var err error
-
-	header, err := stream_rw.ReadByte() // Block
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := stream_rw.Peek(int(header)) // Block. Data is a slice of bytes in buffer which can be modified.
-	if err != nil {
-		return nil, err
-	}
-	stream_rw.Discard(int(header))
-	return data, nil
-}
-
-func writeToStream(stream_rw *bufio.ReadWriter, data string) error {
-	var err error
-
-	err = stream_rw.WriteByte(byte(len(data)))
-	if err != nil {
-		return err
-	}
-	_, err = stream_rw.WriteString(data)
-	if err != nil {
-		return err
-	}
-	stream_rw.Flush()
-	return nil
-}
 
 type Broker struct {
 }
@@ -59,24 +17,18 @@ func (b *Broker) startBrokerServer() error {
 	ln, _ := net.Listen("tcp", fmt.Sprintf(":%d", BROKER_PORT))
 	fmt.Println("Server started...")
 	for {
-		// One connection = one client, ALWAYS. But HTTP/2 helps one client send multiple requests.
-		// Here we are not using HTTP/2, but TCP.
 		conn, _ := ln.Accept() // Block
 		stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
-		data, err := readFromStream(stream_rw)
-		if err != nil {
-			return err
-		}
-
-		// Process
-		parsed_message := b.parseBrokerMessage(data)
-		if parsed_message != nil {
-			resp, err := b.processBrokerMessage(parsed_message)
+		message, err := readMessageFromStream(stream_rw)
+		if err == nil && message != nil {
+			resp, err := b.processBrokerMessage(message)
 			if err != nil {
 				return err
 			}
-			err = writeToStream(stream_rw, resp)
+
+			// Write it back
+			err = writeMessageToStream(stream_rw, resp)
 			if err != nil {
 				return err
 			}
@@ -89,22 +41,71 @@ func (b *Broker) startBrokerServer() error {
 	}
 }
 
-func (b *Broker) parseBrokerMessage(message []byte) *Message {
-	switch message[0] {
-	case ECHO:
-		var st = string(message[1:])
-		return &Message{ECHO: &st, A: nil, B: nil}
-	default:
-		return nil
-	}
-}
-
-func (b *Broker) processBrokerMessage(message *Message) (string, error) {
+// Process
+// - Call inner process function for each message type
+func (b *Broker) processBrokerMessage(message *Message) (*Message, error) {
 	var err error
-	var resp string
+	var resp *Message
 
 	if message.ECHO != nil {
-		resp = fmt.Sprintf("I have received: %s", *message.ECHO)
+		resp, err = b.processEchoMessage(message.ECHO)
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	} else if message.P_REG != nil {
+		resp, err = b.processProducerRegisterMessage(message.P_REG)
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
 	}
+
 	return resp, err
+}
+
+func (b *Broker) processEchoMessage(echo_message *string) (*Message, error) {
+	fmt.Printf("Received Echo message: %s!", *echo_message)
+	resp_echo := fmt.Sprintf("I have received your message: %s", *echo_message)
+	return &Message{R_ECHO: &resp_echo}, nil
+}
+
+func (b *Broker) processProducerRegisterMessage(reg_message *string) (*Message, error) {
+	// TODO: Implement producer registration logic
+	port, err := strconv.ParseInt(*reg_message, 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		conn, err := net.Dial("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			fmt.Printf("Error connecting to producer at port %d: %v\n", port, err)
+			return
+		}
+		fmt.Printf("Connected to client port: %d", port)
+		stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+
+		for {
+			message, err := readMessageFromStream(stream_rw)
+			if message == nil || err != nil {
+				panic(err)
+			}
+
+			// Process message
+			resp, err := b.processBrokerMessage(message)
+			if err != nil {
+				panic(err)
+			}
+
+			// Write message
+			err = writeMessageToStream(stream_rw, resp)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}()
+
+	var resp_byte byte = 1
+	return &Message{R_P_REG: &resp_byte}, nil
 }
