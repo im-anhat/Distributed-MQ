@@ -7,7 +7,8 @@
 *.dll
 *.so
 *.dylib
-kafka
+# Binary built at repo root (`make build`); leading / so we do not ignore cmd/kafka/
+/kafka
 
 # Test binary, built with `go test -c`
 *.test
