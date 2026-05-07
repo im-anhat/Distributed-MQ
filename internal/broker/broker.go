@@ -1,30 +1,33 @@
-package main
+package broker
 
 import (
 	"bufio"
 	"fmt"
 	"net"
+
+	"github.com/im-anhat/Distributed-MQ/internal/topic"
+	"github.com/im-anhat/Distributed-MQ/internal/wire"
 )
 
 const BROKER_PORT = 10000
 
 type Broker struct {
-	topics []Topic
+	topics []topic.Topic
 }
 
-func (b *Broker) init() {
-	b.topics = make([]Topic, 0)
+func (b *Broker) Init() {
+	b.topics = make([]topic.Topic, 0)
 }
 
 // bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-func (b *Broker) startBrokerServer() error {
+func (b *Broker) StartBrokerServer() error {
 	ln, _ := net.Listen("tcp", fmt.Sprintf(":%d", BROKER_PORT))
 	fmt.Println("Server started...")
 	for {
 		conn, _ := ln.Accept() // Block
 		stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
-		message, err := readMessageFromStream(stream_rw)
+		message, err := wire.ReadMessageFromStream(stream_rw)
 		if err == nil && message != nil {
 			resp, err := b.processBrokerMessage(message)
 			if err != nil {
@@ -32,7 +35,7 @@ func (b *Broker) startBrokerServer() error {
 			}
 
 			// Write it back
-			err = writeMessageToStream(stream_rw, resp)
+			err = wire.WriteMessageToStream(stream_rw, resp)
 			if err != nil {
 				return err
 			}
@@ -45,9 +48,9 @@ func (b *Broker) startBrokerServer() error {
 	}
 }
 
-func (b *Broker) processBrokerMessage(message *Message) (*Message, error) {
+func (b *Broker) processBrokerMessage(message *wire.Message) (*wire.Message, error) {
 	var err error
-	var resp *Message
+	var resp *wire.Message
 
 	if message.ECHO != nil {
 		resp, err = b.processEchoMessage(message.ECHO)
@@ -67,35 +70,35 @@ func (b *Broker) processBrokerMessage(message *Message) (*Message, error) {
 	return resp, err
 }
 
-func (b *Broker) processProducerPCM(pcm []byte, topicIdx uint16) (*Message, error) {
-	b.topics[topicIdx].mq.push(pcm)
-	b.topics[topicIdx].mq.debug()
+func (b *Broker) processProducerPCM(pcm []byte, topicIdx uint16) (*wire.Message, error) {
+	b.topics[topicIdx].MQ.Push(pcm)
+	b.topics[topicIdx].MQ.Debug()
 	one := byte(1)
-	return &Message{R_PCM: &one}, nil
+	return &wire.Message{R_PCM: &one}, nil
 }
 
-func (b *Broker) processEchoMessage(echo_message *string) (*Message, error) {
+func (b *Broker) processEchoMessage(echo_message *string) (*wire.Message, error) {
 	fmt.Printf("Received Echo message: %s!", *echo_message)
 	resp_echo := fmt.Sprintf("I have received your message: %s", *echo_message)
-	return &Message{R_ECHO: &resp_echo}, nil
+	return &wire.Message{R_ECHO: &resp_echo}, nil
 }
 
-func (b *Broker) processProducerRegisterMessage(reg_message *ProducerRegisterMessage) (*Message, error) {
+func (b *Broker) processProducerRegisterMessage(reg_message *wire.ProducerRegisterMessage) (*wire.Message, error) {
 	// TODO: Implement producer registration logic
-	port := reg_message.port
-	fmt.Printf("p = %d, t = %d\n", port, reg_message.topicID)
+	port := reg_message.Port
+	fmt.Printf("p = %d, t = %d\n", port, reg_message.TopicID)
 
 	var topicIdx = -1
 	for i, topic := range b.topics {
-		if topic.topicID == reg_message.topicID {
+		if topic.TopicID == reg_message.TopicID {
 			topicIdx = i
 			break
 		}
 	}
 
 	if topicIdx == -1 {
-		tp := Topic{}
-		tp.init(reg_message.topicID)
+		tp := topic.Topic{}
+		tp.Init(reg_message.TopicID)
 		b.topics = append(b.topics, tp)
 		topicIdx = len(b.topics) - 1
 	}
@@ -109,7 +112,7 @@ func (b *Broker) processProducerRegisterMessage(reg_message *ProducerRegisterMes
 		stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 		for {
-			message, err := readMessageFromStream(stream_rw)
+			message, err := wire.ReadMessageFromStream(stream_rw)
 			if message == nil || err != nil {
 				panic(err)
 			}
@@ -120,7 +123,7 @@ func (b *Broker) processProducerRegisterMessage(reg_message *ProducerRegisterMes
 					panic(err)
 				}
 
-				err = writeMessageToStream(stream_rw, resp)
+				err = wire.WriteMessageToStream(stream_rw, resp)
 				if err != nil {
 					panic(err)
 				}
@@ -134,7 +137,7 @@ func (b *Broker) processProducerRegisterMessage(reg_message *ProducerRegisterMes
 			}
 
 			// Write message
-			err = writeMessageToStream(stream_rw, resp)
+			err = wire.WriteMessageToStream(stream_rw, resp)
 			if err != nil {
 				panic(err)
 			}
@@ -142,5 +145,5 @@ func (b *Broker) processProducerRegisterMessage(reg_message *ProducerRegisterMes
 	}()
 
 	var resp_byte byte = 1
-	return &Message{R_P_REG: &resp_byte}, nil
+	return &wire.Message{R_P_REG: &resp_byte}, nil
 }

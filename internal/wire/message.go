@@ -1,4 +1,4 @@
-package main
+package wire
 
 import (
 	"bufio"
@@ -26,23 +26,23 @@ type Message struct {
 }
 
 type ProducerRegisterMessage struct {
-	port    uint16
-	topicID uint16
+	Port    uint16
+	TopicID uint16
 }
 
 func (m *ProducerRegisterMessage) fromByte(stream_message []byte) {
 	// First 2 bytes are port
 	// Next 2 bytes are topic ID
-	m.port = uint16(stream_message[0])<<8 + uint16(stream_message[1])
-	m.topicID = uint16(stream_message[2])<<8 + uint16(stream_message[3])
+	m.Port = uint16(stream_message[0])<<8 + uint16(stream_message[1])
+	m.TopicID = uint16(stream_message[2])<<8 + uint16(stream_message[3])
 }
 
 func (m *ProducerRegisterMessage) toByte() []byte {
 	bytes := make([]byte, 4)
-	bytes[0] = byte(m.port >> 8)
-	bytes[1] = byte(m.port & 0xFF)
-	bytes[2] = byte(m.topicID >> 8)
-	bytes[3] = byte(m.topicID & 0xFF)
+	bytes[0] = byte(m.Port >> 8)
+	bytes[1] = byte(m.Port & 0xFF)
+	bytes[2] = byte(m.TopicID >> 8)
+	bytes[3] = byte(m.TopicID & 0xFF)
 	return bytes
 }
 
@@ -91,7 +91,7 @@ func readFromStream(stream_rw *bufio.ReadWriter) ([]byte, error) {
 	return data, nil
 }
 
-func readMessageFromStream(stream_rw *bufio.ReadWriter) (*Message, error) {
+func ReadMessageFromStream(stream_rw *bufio.ReadWriter) (*Message, error) {
 	data, err := readFromStream(stream_rw)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func writeToStreamWithType(stream_rw *bufio.ReadWriter, msgType byte, data strin
 	return nil
 }
 
-func writeMessageToStream(stream_rw *bufio.ReadWriter, message *Message) error {
+func WriteMessageToStream(stream_rw *bufio.ReadWriter, message *Message) error {
 	if message.ECHO != nil {
 		return writeToStreamWithType(stream_rw, ECHO, *message.ECHO)
 	}
