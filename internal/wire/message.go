@@ -1,4 +1,4 @@
-package main
+package wire
 
 import (
 	"bufio"
@@ -8,17 +8,42 @@ import (
 const (
 	ECHO  = 1
 	P_REG = 2
+	PCM   = 3
 	// Response
 	R_ECHO  = 101
 	R_P_REG = 102
+	R_PCM   = 103
 )
 
 type Message struct {
 	ECHO  *string
-	P_REG *string
+	P_REG *ProducerRegisterMessage
+	PCM   []byte
 	// Response
 	R_ECHO  *string
 	R_P_REG *byte
+	R_PCM   *byte
+}
+
+type ProducerRegisterMessage struct {
+	Port    uint16
+	TopicID uint16
+}
+
+func (m *ProducerRegisterMessage) fromByte(stream_message []byte) {
+	// First 2 bytes are port
+	// Next 2 bytes are topic ID
+	m.Port = uint16(stream_message[0])<<8 + uint16(stream_message[1])
+	m.TopicID = uint16(stream_message[2])<<8 + uint16(stream_message[3])
+}
+
+func (m *ProducerRegisterMessage) toByte() []byte {
+	bytes := make([]byte, 4)
+	bytes[0] = byte(m.Port >> 8)
+	bytes[1] = byte(m.Port & 0xFF)
+	bytes[2] = byte(m.TopicID >> 8)
+	bytes[3] = byte(m.TopicID & 0xFF)
+	return bytes
 }
 
 func parseMessage(message []byte) *Message {
@@ -26,15 +51,21 @@ func parseMessage(message []byte) *Message {
 	case ECHO:
 		var st = string(message[1:])
 		return &Message{ECHO: &st}
+	case PCM:
+		return &Message{PCM: message[1:]}
 	case P_REG:
-		var st = string(message[1:])
-		return &Message{P_REG: &st}
+		var m = ProducerRegisterMessage{}
+		m.fromByte(message[1:])
+		return &Message{P_REG: &m}
 	case R_ECHO:
 		var st = string(message[1:])
 		return &Message{R_ECHO: &st}
 	case R_P_REG:
 		var b = message[1]
 		return &Message{R_P_REG: &b}
+	case R_PCM:
+		var b = message[1]
+		return &Message{R_PCM: &b}
 	default:
 		return nil
 	}
@@ -60,7 +91,7 @@ func readFromStream(stream_rw *bufio.ReadWriter) ([]byte, error) {
 	return data, nil
 }
 
-func readMessageFromStream(stream_rw *bufio.ReadWriter) (*Message, error) {
+func ReadMessageFromStream(stream_rw *bufio.ReadWriter) (*Message, error) {
 	data, err := readFromStream(stream_rw)
 	if err != nil {
 		return nil, err
@@ -97,16 +128,29 @@ func writeToStreamWithType(stream_rw *bufio.ReadWriter, msgType byte, data strin
 	return nil
 }
 
-func writeMessageToStream(stream_rw *bufio.ReadWriter, message *Message) error {
+func WriteMessageToStream(stream_rw *bufio.ReadWriter, message *Message) error {
 	if message.ECHO != nil {
 		return writeToStreamWithType(stream_rw, ECHO, *message.ECHO)
-	} else if message.P_REG != nil {
-		return writeToStreamWithType(stream_rw, P_REG, *message.P_REG)
-	} else if message.R_ECHO != nil {
+	}
+	if message.P_REG != nil {
+		bytes := string(message.P_REG.toByte())
+		return writeToStreamWithType(stream_rw, P_REG, bytes)
+	}
+	if message.R_ECHO != nil {
 		return writeToStreamWithType(stream_rw, R_ECHO, *message.R_ECHO)
-	} else if message.R_P_REG != nil {
+	}
+	if message.R_P_REG != nil {
 		data := fmt.Sprintf("%d", *message.R_P_REG)
 		return writeToStreamWithType(stream_rw, R_P_REG, data)
+	}
+	if message.PCM != nil {
+		if err := writeToStreamWithType(stream_rw, PCM, string(message.PCM)); err != nil {
+			return err
+		}
+	}
+	if message.R_PCM != nil {
+		data := fmt.Sprintf("%d", *message.R_PCM)
+		return writeToStreamWithType(stream_rw, R_PCM, data)
 	}
 	return nil
 }

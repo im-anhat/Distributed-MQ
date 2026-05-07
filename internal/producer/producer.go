@@ -1,31 +1,39 @@
-package main
+package producer
 
 import (
 	"bufio"
 	"fmt"
 	"net"
 	"os"
+
+	"github.com/im-anhat/Distributed-MQ/internal/broker"
+	"github.com/im-anhat/Distributed-MQ/internal/wire"
 )
 
 type Producer struct {
+	Port    uint16
+	TopicID uint16
 }
 
-func (p *Producer) registerWithBroker(port int16) error {
+func (p *Producer) registerWithBroker() error {
 	var err error
-	conn, err := net.Dial("tcp", fmt.Sprintf(":%d", BROKER_PORT))
+	conn, err := net.Dial("tcp", fmt.Sprintf(":%d", broker.BROKER_PORT))
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-
 	stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-	port_str := fmt.Sprintf("%d", port)
-	err = writeMessageToStream(stream_rw, &Message{P_REG: &port_str})
+
+	p_reg := wire.ProducerRegisterMessage{}
+	p_reg.Port = p.Port
+	p_reg.TopicID = p.TopicID
+	fmt.Printf("pRegMsg: port=%d, topicID=%d\n", p_reg.Port, p_reg.TopicID)
+	err = wire.WriteMessageToStream(stream_rw, &wire.Message{P_REG: &p_reg})
 	if err != nil {
 		return err
 	}
 
-	message, err := readMessageFromStream(stream_rw)
+	message, err := wire.ReadMessageFromStream(stream_rw)
 	if err != nil {
 		return err
 	}
@@ -33,16 +41,16 @@ func (p *Producer) registerWithBroker(port int16) error {
 	return nil
 }
 
-func (p *Producer) startProducerServer(port int16) error {
+func (p *Producer) StartProducerServer() error {
 	// Start producer server
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", p.Port))
 	if err != nil {
 		return err
 	}
 	fmt.Println("Producer server started.")
 
 	// Register with broker first
-	err = p.registerWithBroker(port)
+	err = p.registerWithBroker()
 	if err != nil {
 		return err
 	}
@@ -61,18 +69,18 @@ func (p *Producer) startProducerServer(port int16) error {
 			break
 		}
 
-		// Write message to stream
-		err = writeMessageToStream(stream_rw, &Message{ECHO: &line})
+		// Write PCM
+		err = wire.WriteMessageToStream(stream_rw, &wire.Message{PCM: []byte(line)})
 		if err != nil {
 			break
 		}
 
 		// Read message from stream
-		resp_message, err := readMessageFromStream(stream_rw)
+		resp_message, err := wire.ReadMessageFromStream(stream_rw)
 		if err != nil {
 			break
 		}
-		fmt.Printf("Received message from broker: %s", *resp_message.R_ECHO)
+		fmt.Printf("Received R_PCM from broker: %d", *resp_message.R_PCM)
 	}
 
 	err = conn.Close()
