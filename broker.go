@@ -4,12 +4,16 @@ import (
 	"bufio"
 	"fmt"
 	"net"
-	"strconv"
 )
 
 const BROKER_PORT = 10000
 
 type Broker struct {
+	topics []Topic
+}
+
+func (b *Broker) init() {
+	b.topics = make([]Topic, 0)
 }
 
 // bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
@@ -41,8 +45,6 @@ func (b *Broker) startBrokerServer() error {
 	}
 }
 
-// Process
-// - Call inner process function for each message type
 func (b *Broker) processBrokerMessage(message *Message) (*Message, error) {
 	var err error
 	var resp *Message
@@ -53,7 +55,8 @@ func (b *Broker) processBrokerMessage(message *Message) (*Message, error) {
 			return nil, err
 		}
 		return resp, nil
-	} else if message.P_REG != nil {
+	}
+	if message.P_REG != nil {
 		resp, err = b.processProducerRegisterMessage(message.P_REG)
 		if err != nil {
 			return nil, err
@@ -64,17 +67,37 @@ func (b *Broker) processBrokerMessage(message *Message) (*Message, error) {
 	return resp, err
 }
 
+func (b *Broker) processProducerPCM(pcm []byte, topicIdx uint16) (*Message, error) {
+	b.topics[topicIdx].mq.push(pcm)
+	b.topics[topicIdx].mq.debug()
+	one := byte(1)
+	return &Message{R_PCM: &one}, nil
+}
+
 func (b *Broker) processEchoMessage(echo_message *string) (*Message, error) {
 	fmt.Printf("Received Echo message: %s!", *echo_message)
 	resp_echo := fmt.Sprintf("I have received your message: %s", *echo_message)
 	return &Message{R_ECHO: &resp_echo}, nil
 }
 
-func (b *Broker) processProducerRegisterMessage(reg_message *string) (*Message, error) {
+func (b *Broker) processProducerRegisterMessage(reg_message *ProducerRegisterMessage) (*Message, error) {
 	// TODO: Implement producer registration logic
-	port, err := strconv.ParseInt(*reg_message, 10, 32)
-	if err != nil {
-		return nil, err
+	port := reg_message.port
+	fmt.Printf("p = %d, t = %d\n", port, reg_message.topicID)
+
+	var topicIdx = -1
+	for i, topic := range b.topics {
+		if topic.topicID == reg_message.topicID {
+			topicIdx = i
+			break
+		}
+	}
+
+	if topicIdx == -1 {
+		tp := Topic{}
+		tp.init(reg_message.topicID)
+		b.topics = append(b.topics, tp)
+		topicIdx = len(b.topics) - 1
 	}
 
 	go func() {
@@ -83,13 +106,25 @@ func (b *Broker) processProducerRegisterMessage(reg_message *string) (*Message, 
 			fmt.Printf("Error connecting to producer at port %d: %v\n", port, err)
 			return
 		}
-		fmt.Printf("Connected to client port: %d", port)
 		stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 		for {
 			message, err := readMessageFromStream(stream_rw)
 			if message == nil || err != nil {
 				panic(err)
+			}
+
+			if message.PCM != nil {
+				resp, err := b.processProducerPCM(message.PCM, uint16(topicIdx))
+				if err != nil {
+					panic(err)
+				}
+
+				err = writeMessageToStream(stream_rw, resp)
+				if err != nil {
+					panic(err)
+				}
+				continue
 			}
 
 			// Process message
