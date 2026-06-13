@@ -9,7 +9,7 @@ A Kafka-inspired messaging system in Go with persistent TCP connections, custom 
 - Added partitioned queue storage with fixed-size buffers for predictable memory usage.
 - Supported concurrent consumer-group delivery with partition-level synchronization.
 - Persisted queue offsets to recover topic, partition, and group progress after restart.
-- Local benchmark results: **470K+ msgs/sec**, **1–3% protocol overhead**, and **10K+ buffered messages per partition**.
+- Local benchmark: **470K+ msgs/sec**, **1–3% protocol overhead**, and **10K+ buffered messages per partition**.
 
 ## Architecture
 
@@ -25,21 +25,16 @@ The broker receives producer and consumer registrations, creates topics and cons
 
 ### Flow 1: High-Level Architecture
 
-![High-Level Architecture]()
+![High-Level Architecture](https://github-production-user-asset-6210df.s3.amazonaws.com/130151173/607518574-d20f93bd-35c6-45ee-9200-7b0456c12b4f.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260613%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260613T171300Z&X-Amz-Expires=300&X-Amz-Signature=658390108d926103f50c5b3056ebc9677c2aee02fb0106aedb410b2897dac983&X-Amz-SignedHeaders=host&response-content-type=image%2Fpng)
 
-> Placeholder: add a diagram showing Producer → Broker → Topic → Consumer Group → Partitions → Consumers.
 
 ### Flow 2: Producer Publish Flow
 
-![Producer Publish Flow]()
-
-> Placeholder: add a diagram showing producer registration, topic lookup/creation, message publish, broker routing, queue append, and acknowledgement.
+![Producer Publish Flow](https://github-production-user-asset-6210df.s3.amazonaws.com/130151173/607519094-54c760ab-1e1b-4a76-8ac3-73507ec71171.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260613%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260613T171934Z&X-Amz-Expires=300&X-Amz-Signature=933a622bb672d3d7f7c5e91646f5505638c36b2a63fe063b2ac7826c82daf0f7&X-Amz-SignedHeaders=host&response-content-type=image%2Fpng)
 
 ### Flow 3: Consumer Delivery and Recovery Flow
 
-![Consumer Delivery and Recovery Flow]()
-
-> Placeholder: add a diagram showing consumer registration, group/partition assignment, message delivery, offset persistence, and restart recovery.
+![Consumer Delivery and Recovery Flow](https://github-production-user-asset-6210df.s3.amazonaws.com/130151173/607519147-9d023401-d7a3-4eed-9543-80ac6b55a763.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260613%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260613T172014Z&X-Amz-Expires=300&X-Amz-Signature=6c1e76d8ff274485afea794dfeb285274d32d6d6066adbbf6c5e928b60f8063c&X-Amz-SignedHeaders=host&response-content-type=image%2Fpng)
 
 ## Core Components
 
