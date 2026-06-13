@@ -1,21 +1,22 @@
-package producer
+package consumer
 
 import (
 	"bufio"
 	"fmt"
 	"net"
-	"os"
+	"time"
 
 	"github.com/im-anhat/Distributed-MQ/internal/config"
 	"github.com/im-anhat/Distributed-MQ/internal/wire"
 )
 
-type Producer struct {
+type Consumer struct {
 	Port    uint16
 	TopicID uint16
+	GroupID uint16
 }
 
-func (p *Producer) registerWithBroker() error {
+func (c *Consumer) registerWithBroker() error {
 	var err error
 	conn, err := net.Dial("tcp", fmt.Sprintf(":%d", config.BrokerPort))
 	if err != nil {
@@ -24,11 +25,12 @@ func (p *Producer) registerWithBroker() error {
 	defer conn.Close()
 	stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
-	p_reg := wire.ProducerRegisterMessage{}
-	p_reg.Port = p.Port
-	p_reg.TopicID = p.TopicID
-	fmt.Printf("pRegMsg: port=%d, topicID=%d\n", p_reg.Port, p_reg.TopicID)
-	err = wire.WriteMessageToStream(stream_rw, &wire.Message{P_REG: &p_reg})
+	c_reg := wire.ConsumerRegisterMessage{}
+	c_reg.Port = c.Port
+	c_reg.TopicID = c.TopicID
+	c_reg.GroupID = c.GroupID
+	fmt.Printf("pRegMsg: port=%d, topicID=%d, groupID=%d\n", c_reg.Port, c_reg.TopicID, c_reg.GroupID)
+	err = wire.WriteMessageToStream(stream_rw, &wire.Message{C_REG: &c_reg})
 	if err != nil {
 		return err
 	}
@@ -37,17 +39,17 @@ func (p *Producer) registerWithBroker() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Received response from broker: %d\n", *message.R_P_REG)
+	fmt.Printf("Received response from broker: %d\n", *message.R_C_REG)
 	return nil
 }
 
-func (p *Producer) StartProducerServer() error {
-	// Start producer server
+func (p *Consumer) StartConsumerServer() error {
+	// Start Consumer server
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", p.Port))
 	if err != nil {
 		return err
 	}
-	fmt.Println("Producer server started.")
+	fmt.Println("Consumer server started.")
 
 	// Register with broker first
 	err = p.registerWithBroker()
@@ -56,31 +58,27 @@ func (p *Producer) StartProducerServer() error {
 	}
 
 	conn, _ := ln.Accept() // Block
-	fmt.Println("Producer server accepted connection.")
+	fmt.Println("Consumer server accepted connection.")
 
 	// Read/Write buffer
-	rd := bufio.NewReader(os.Stdin)
 	stream_rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
 	for {
-		// Read from stdin
-		line, err := rd.ReadString('\n')
+		// Read message to consume
+		message, err := wire.ReadMessageFromStream(stream_rw)
 		if err != nil {
 			break
 		}
-
-		// Write PCM
-		err = wire.WriteMessageToStream(stream_rw, &wire.Message{PCM: []byte(line)})
+		fmt.Printf("Receive PCM from broker: %s\n", message.PCM)
+		time.Sleep(1 * time.Second)
+		// Write R_PCM
+		var resp byte = 1
+		err = wire.WriteMessageToStream(stream_rw, &wire.Message{
+			R_PCM: &resp,
+		})
 		if err != nil {
 			break
 		}
-
-		// Read message from stream
-		resp_message, err := wire.ReadMessageFromStream(stream_rw)
-		if err != nil {
-			break
-		}
-		fmt.Printf("Received R_PCM from broker: %d\n", *resp_message.R_PCM)
 	}
 
 	err = conn.Close()

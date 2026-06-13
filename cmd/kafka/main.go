@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	brokerpkg "github.com/im-anhat/Distributed-MQ/internal/broker"
+	consumerpkg "github.com/im-anhat/Distributed-MQ/internal/consumer"
 	producerpkg "github.com/im-anhat/Distributed-MQ/internal/producer"
 	"github.com/im-anhat/Distributed-MQ/internal/wire"
 )
@@ -38,8 +39,28 @@ func main() {
 		producer.TopicID = uint16(topicID)
 		fmt.Printf("producer: port=%d, topicID=%d\n", producer.Port, producer.TopicID)
 		producer.StartProducerServer()
+	} else if os.Args[1] == "consumer" {
+		fmt.Println("Trying to start producer processes")
+		port, err := strconv.ParseInt(os.Args[2], 10, 16)
+		if err != nil {
+			panic(err)
+		}
+		topicID, err := strconv.ParseInt(os.Args[3], 10, 16)
+		if err != nil {
+			panic(err)
+		}
+		groupID, err := strconv.ParseInt(os.Args[4], 10, 16)
+		if err != nil {
+			panic(err)
+		}
+		consumer := &consumerpkg.Consumer{}
+		consumer.Port = uint16(port)
+		consumer.TopicID = uint16(topicID)
+		consumer.GroupID = uint16(groupID)
+		fmt.Printf("consumer: port=%d, topicID=%d, groupID=%d\n", consumer.Port, consumer.TopicID, consumer.GroupID)
+		consumer.StartConsumerServer()
 	} else {
-		clientConnectTCPAndEcho(10000)
+		panic("Invalid argument")
 	}
 }
 
