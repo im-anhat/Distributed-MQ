@@ -36,12 +36,21 @@ func (q *Queue) Pop() []byte {
 	return data
 }
 
+func (q *Queue) Peek(offset uint) []byte {
+	position := q.head + uint32(offset)*maxMessageSize
+	position %= maxMessageSize * queueCapacity
+	data := underArr[position : position+uint32(underSize[position])]
+	return data
+}
+
 func (q *Queue) Debug() {
 	fmt.Printf("Debug queue: \n")
 	var cur = q.head
+	offset := 0
 	for {
 		data := underArr[cur : cur+uint32(underSize[cur])]
-		fmt.Printf("%s\n", data)
+		fmt.Printf("Offset %d: %s\n", offset, data)
+		offset++
 		cur += maxMessageSize
 		cur %= maxMessageSize * queueCapacity
 		if cur == q.tail {
